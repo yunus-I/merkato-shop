@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* This makes the app feel like a mobile app */
+body {
+  background-color: #f3f4f6;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  /* Prevent scrolling bounce on some mobile browsers */
+  overflow-x: hidden;
+}
+
+/* Smooth scrolling for product lists */
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* Ensure the app fits the screen perfectly */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
