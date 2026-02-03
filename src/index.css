@@ -15,6 +15,14 @@ body {
   transition: background-color 200ms var(--ease), color 200ms var(--ease);
 }
 
+/* Respect device safe areas (notches, home indicators) */
+body{
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 /* Smooth scrolling for product lists */
 * {
   scrollbar-width: none;
@@ -45,6 +53,8 @@ body {
   --shadow-2: 0 6px 18px rgba(2,6,23,0.12);
   --radius: 12px;
   --nav-height: 72px;
+  --container-pad: 16px;
+  --content-max: 1100px;
 }
 
 @media (prefers-color-scheme: dark){
@@ -75,6 +85,14 @@ body {
   background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.02) 100%);
 }
 
+/* fluid app container with safe-area aware horizontal padding */
+.app-container{
+  padding-left: calc(var(--container-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--container-pad) + env(safe-area-inset-right));
+}
+
+.app-topbar{ position: sticky; top: 0; z-index: 60; }
+
 .app-topbar{
   height: var(--nav-height);
   display:flex;
@@ -86,6 +104,32 @@ body {
   box-shadow: var(--shadow-1);
 }
 
+/* make topbar slightly larger and more touch-friendly */
+.app-topbar{ padding-left: calc(var(--container-pad) + 8px); padding-right: calc(var(--container-pad) + 8px); }
+.app-topbar .app-title{ font-size:18px; }
+
+/* Top nav buttons (Home / Cart) */
+.top-nav-btn{
+  display:inline-flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  padding:8px 10px;
+  border-radius:10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+  font-weight:600;
+}
+.top-nav-btn.active{ background: linear-gradient(90deg,var(--primary),var(--primary-600)); color:white; box-shadow: 0 8px 22px rgba(2,132,199,0.12); }
+.top-nav-btn svg{ width:20px; height:20px; }
+.top-nav-btn .text-[12px]{ font-size:12px; }
+.top-nav-btn:focus{ outline: 3px solid rgba(6,182,212,0.12); }
+.top-nav-btn.relative{ position:relative; }
+.top-badge{ position:absolute; top:-6px; right:-6px; background:var(--accent); color:white; width:18px; height:18px; display:flex; align-items:center; justify-content:center; border-radius:999px; font-size:11px; font-weight:800; box-shadow: 0 4px 10px rgba(2,6,23,0.12); }
+
+
 .app-title{
   font-weight:700;
   font-size:18px;
@@ -94,8 +138,41 @@ body {
 
 .app-content{
   flex:1 1 auto;
-  padding:16px;
+  padding:18px 0;
+  width:100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
 }
+
+/* Bottom bar (mobile primary controls) */
+.app-bottom{
+  height: calc(var(--nav-height) + 4px);
+  padding-top:10px;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 10px);
+  gap:12px;
+}
+.app-bottom .flex{ align-items:center; }
+.app-bottom .btn{ padding:10px 14px; border-radius:12px; }
+.app-bottom .btn svg, .app-bottom svg{ width:20px; height:20px; }
+.app-bottom .text-[10px]{ font-size:12px; }
+.app-bottom .badge, .app-bottom .filter-chip{ transform: translateY(0); }
+
+/* Make nav icons and text bigger and spaced out */
+.app-bottom button{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:8px 10px; }
+.app-bottom button span{ line-height:1; }
+
+/* emphasize checkout button */
+.app-bottom .btn-primary{ padding:10px 14px; font-size:15px; box-shadow: 0 10px 24px rgba(2,132,199,0.12); border-radius:12px; }
+
+/* larger min touch for chips and controls */
+.filter-chip{ padding:8px 12px; font-size:14px; }
+
+@media (min-width:768px){
+  .app-bottom{ padding-left:20px; padding-right:20px; }
+  .app-bottom .btn svg, .app-bottom svg{ width:22px; height:22px; }
+  .app-bottom .text-[10px]{ font-size:13px; }
+}
+
 
 .bottom-nav{
   height: var(--nav-height);
@@ -108,32 +185,79 @@ body {
 
 /* Card / product primitives */
 .card{
-  background: var(--surface);
-  border-radius: calc(var(--radius) - 2px);
-  box-shadow: var(--shadow-1);
+  background: linear-gradient(180deg, var(--surface), rgba(255,255,255,0.02));
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 6px 18px rgba(2,6,23,0.06);
   padding:12px;
-  transition: transform 180ms var(--ease), box-shadow 180ms var(--ease);
+  transition: transform 180ms var(--ease), box-shadow 180ms var(--ease), border-color 180ms var(--ease);
+  border: 1px solid rgba(2,6,23,0.04);
 }
-.card:hover{ transform: translateY(-6px); box-shadow: var(--shadow-2); }
+.card:hover{ transform: translateY(-6px); box-shadow: var(--shadow-2); border-color: rgba(2,6,23,0.08); }
 
 .product-grid{
   display:grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap:12px;
 }
-@media(min-width:768px){ .product-grid{ grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; } }
-@media(min-width:1024px){ .product-grid{ grid-template-columns: repeat(4, minmax(0,1fr)); gap:20px; } }
+@media(min-width:420px){ .product-grid{ gap:14px; grid-auto-rows: auto; } }
+@media(min-width:768px){ .product-grid{ gap:16px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+@media(min-width:1200px){ .product-grid{ gap:20px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
 
 .product-image{
   width:100%;
-  height:160px;
+  height:auto;
+  aspect-ratio: 4 / 3;
   object-fit:cover;
   border-radius:8px;
 }
 
 .product-meta{ padding:8px 4px 0 4px; }
-.product-title{ font-weight:600; font-size:14px; color:var(--text); }
-.product-price{ color:var(--primary-600); font-weight:700; }
+.product-title{ font-weight:700; font-size:15px; color:var(--text); }
+
+/* Pricing clarity styles */
+.price-primary{ font-size:14px; color:var(--text); font-weight:600; display:flex; gap:8px; align-items:baseline; }
+.price-amount{ font-size:20px; font-weight:900; color:var(--primary-600); margin-left:6px; }
+.price-secondary{ font-size:12px; color:var(--muted); text-decoration: line-through; margin-top:4px; }
+.price-meta{ font-size:12px; color:var(--muted); margin-top:4px; }
+.price-meta .muted{ color:var(--muted); font-weight:700; }
+
+/* Card badge */
+.card-badge{
+  position:absolute;
+  left:12px;
+  top:12px;
+  background:linear-gradient(90deg,#ffb86b,#ff7a45);
+  color:white;
+  padding:6px 10px;
+  border-radius:999px;
+  font-weight:800;
+  font-size:12px;
+  box-shadow: 0 6px 18px rgba(255,122,69,0.12);
+  z-index: 5;
+}
+
+/* Ensure card positions can host badges */
+.card{ position: relative; overflow: visible; }
+
+/* Slightly brighter card contrast */
+.card{ background-color: var(--surface); }
+
+/* Stepper controls inside product cards */
+.stepper{ display:inline-flex; align-items:center; gap:8px; background: transparent; border-radius:10px; }
+.stepper .stepper-value{ min-width:28px; text-align:center; font-weight:800; }
+.stepper button{ padding:6px 8px; }
+
+/* Added confirmation badge */
+.added-badge{ position:absolute; right:12px; top:12px; background: linear-gradient(90deg,#06b6d4,#0891b2); color:white; padding:8px; border-radius:999px; display:flex; align-items:center; justify-content:center; box-shadow: 0 10px 24px rgba(6,182,212,0.12); animation: pop 420ms cubic-bezier(.2,.9,.2,1); z-index:40; }
+@keyframes pop{ 0%{ transform: scale(0.6); opacity:0 } 60%{ transform: scale(1.12); opacity:1 } 100%{ transform: scale(1); opacity:1 } }
+
+/* Min order pill on product cards */
+.min-order-pill{ background: rgba(2,6,23,0.04); color:var(--text); padding:6px 8px; border-radius:8px; font-weight:700; font-size:12px; }
+
+/* Sticky cart note above checkout */
+.sticky-cart-note{ display:flex; align-items:center; gap:8px; background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)); padding:8px 10px; border-radius:10px; font-weight:700; font-size:13px; color:var(--text); box-shadow: var(--shadow-1); }
+.sticky-cart-note .note-emoji{ font-size:18px; }
+
 
 /* Buttons */
 .btn{ display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; transition: transform 140ms var(--ease), box-shadow 140ms var(--ease); }
@@ -156,6 +280,7 @@ body {
 /* Modal & toast */
 .modal-backdrop{ position:fixed; inset:0; background: rgba(2,6,23,0.45); display:flex; align-items:center; justify-content:center; z-index:60; }
 .modal{ background:var(--surface); border-radius:14px; padding:18px; box-shadow: var(--shadow-2); max-width:600px; width:92%; }
+.modal{ max-height: calc(100vh - 80px); overflow:auto; }
 .toast{ position:fixed; right:18px; bottom:18px; background:linear-gradient(90deg,var(--primary),var(--primary-600)); color:white; padding:10px 14px; border-radius:10px; box-shadow: var(--shadow-2); }
 
 /* Visually hidden (accessible) */
@@ -166,3 +291,28 @@ body {
 
 /* Tiny utility to center fallback empty states */
 .empty-state{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:28px; color:var(--muted); }
+
+/* Filter chip styles */
+.filter-row{ display:flex; gap:8px; align-items:center; }
+.filter-chip{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background:transparent; border:1px solid rgba(2,6,23,0.04); color:var(--text); font-weight:600; cursor:pointer; white-space:nowrap; }
+.filter-chip .emoji{ font-size:14px; line-height:1; }
+.filter-chip.active{ background: linear-gradient(90deg,var(--primary),var(--primary-600)); color:white; border: none; box-shadow: 0 6px 18px rgba(2,132,199,0.12); }
+.filter-chip:focus{ outline:3px solid rgba(6,182,212,0.12); }
+
+/* make chips horizontally scrollable on small screens */
+.filter-scroll{ display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; }
+.filter-scroll::-webkit-scrollbar{ height:6px; }
+.filter-scroll::-webkit-scrollbar-thumb{ background: rgba(2,6,23,0.06); border-radius:8px; }
+
+/* Advanced filter card */
+.filter-advanced{ padding:10px; background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border-radius:12px; }
+.filter-advanced .input{ background:var(--surface); }
+
+/* small-screen adjustments */
+@media (max-width:420px){
+  :root{ --nav-height: 64px; --radius: 10px; --container-pad: 12px; }
+  .app-topbar{ padding:10px; }
+  .app-title{ font-size:16px; }
+  .product-image{ aspect-ratio: 1.6 / 1; }
+}
+

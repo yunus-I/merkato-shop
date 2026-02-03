@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { 
-  ShoppingCart, Home, User, Phone, Search, Star, 
-  Truck, X, Plus, Minus, Check
-} from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ShoppingCart, Home, Phone, Search, Star, Truck, X } from 'lucide-react';
+import ProductCard from './components/ProductCard';
+import CartItem from './components/CartItem';
+import ModalCheckout from './components/ModalCheckout';
+import Toast from './components/Toast';
+import QuickView from './components/QuickView';
 
 // --- INITIAL PRODUCT DATA ---
 const PRODUCTS = [
@@ -11,7 +13,7 @@ const PRODUCTS = [
     name: "Cotton Ankle Socks (Dozen)",
     nameAm: "የጥጥ ካልሲ (በደርዘን)",
     nameOm: "Kalsii Pamba (Darzana)",
-    price: 360, 
+    price: 360,
     originalPrice: 450,
     image: "https://images.unsplash.com/photo-1586350977771-b3b0abd50c82?auto=format&fit=crop&q=80&w=300",
     category: "socks",
@@ -23,9 +25,9 @@ const PRODUCTS = [
     name: "Men's Boxer Briefs (Dozen)",
     nameAm: "የወንድ ቦክሰር (በደርዘን)",
     nameOm: "Boxer Dhiiraa (Darzana)",
-    price: 1800, 
+    price: 1800,
     originalPrice: 2200,
-    image: "https://images.unsplash.com/photo-1598236140643-22841dc3188d?auto=format&fit=crop&q=80&w=300",
+    image: "https://i.postimg.cc/B605z7wK/image.png",
     category: "underwear",
     rating: 4.9,
     sold: 85
@@ -37,7 +39,7 @@ const PRODUCTS = [
     nameOm: "Qabatoo Gogaa (Darzana)",
     price: 3000,
     originalPrice: 3600,
-    image: "https://images.unsplash.com/photo-1624222244025-c5c4013587b1?auto=format&fit=crop&q=80&w=300",
+    image: "https://i.postimg.cc/JnFrnSVB/image.png",
     category: "belts",
     rating: 4.5,
     sold: 40
@@ -95,8 +97,67 @@ export default function App() {
   const [cart, setCart] = useState([]);
   const [userInfo, setUserInfo] = useState({ name: '', phone: '' });
   const [showModal, setShowModal] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [category, setCategory] = useState('all');
+  const [sortBy, setSortBy] = useState('featured');
+  const [minPrice, setMinPrice] = useState(0);
+  const [maxPrice, setMaxPrice] = useState(100000);
+  const [minRating, setMinRating] = useState(0);
 
+  const modalFirstRef = useRef(null);
   const t = TRANSLATIONS[lang];
+
+  // memoized categories (avoid recreating inside JSX)
+  const categories = useMemo(() => Array.from(new Set(PRODUCTS.map(p => p.category))), []);
+
+  // memoized filtered + sorted product list
+  const filteredItems = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    let items = PRODUCTS.filter(p => {
+      if (category !== 'all' && p.category !== category) return false;
+      if (p.price < minPrice) return false;
+      if (p.price > maxPrice) return false;
+      if (p.rating < minRating) return false;
+      if (!q) return true;
+      const names = [p.name, p.nameAm, p.nameOm].join(' ').toLowerCase();
+      return names.includes(q);
+    });
+
+    items = items.sort((a,b) => {
+      if (sortBy === 'price-asc') return a.price - b.price;
+      if (sortBy === 'price-desc') return b.price - a.price;
+      if (sortBy === 'rating') return b.rating - a.rating;
+      if (sortBy === 'sold') return b.sold - a.sold;
+      return a.id - b.id;
+    });
+
+    return items;
+  }, [debouncedSearch, category, sortBy]);
+
+  useEffect(() => {
+    const id = setTimeout(() => setLoading(false), 450);
+    return () => clearTimeout(id);
+  }, []);
+
+  // debounce search input
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  useEffect(() => {
+    if (toast) {
+      const id = setTimeout(() => setToast(null), 2200);
+      return () => clearTimeout(id);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (showModal && modalFirstRef.current) modalFirstRef.current.focus();
+  }, [showModal]);
 
   const addToCart = (p) => {
     setCart(prev => {
@@ -104,124 +165,223 @@ export default function App() {
       if (exists) return prev.map(i => i.id === p.id ? {...i, qty: i.qty + 1} : i);
       return [...prev, {...p, qty: 1}];
     });
+    setToast(`${p.name} added`);
+  };
+  
+  // support quantity when adding (used by quick view)
+  const addToCartWithQty = (p, qty = 1) => {
+    setCart(prev => {
+      const exists = prev.find(i => i.id === p.id);
+      if (exists) return prev.map(i => i.id === p.id ? {...i, qty: i.qty + qty} : i);
+      return [...prev, {...p, qty}];
+    });
+    setToast(`${p.name} added`);
+  };
+
+  const [quickProduct, setQuickProduct] = useState(null);
+
+  const removeFromCart = (id) => setCart(prev => prev.filter(i => i.id !== id));
+
+  const changeQty = (id, delta) => {
+    setCart(prev => prev.map(i => i.id === id ? {...i, qty: Math.max(0, i.qty + delta)} : i).filter(i => i.qty > 0));
   };
 
   const totalAmount = cart.reduce((s, i) => s + (i.price * i.qty), 0);
 
+  const confirmOrder = () => {
+    if (!userInfo.name || !userInfo.phone) { setToast('Please add name & phone'); return; }
+    setShowModal(false);
+    setCart([]);
+    setToast(t.orderSuccess);
+    setPage('home');
+  };
+
   return (
-    <div className="max-w-md mx-auto bg-white min-h-screen pb-20 shadow-xl relative font-sans">
-      {/* Header */}
-      <div className="bg-red-600 p-4 text-white sticky top-0 z-50">
-        <div className="flex justify-between items-center mb-3">
-          <h1 className="font-bold text-xl flex items-center gap-2"><Truck /> MERKATO</h1>
-          <div className="flex gap-2 text-[10px]">
-            {['en', 'am', 'om'].map(l => (
-              <button key={l} onClick={() => setLang(l)} className={`px-2 py-1 rounded uppercase ${lang === l ? 'bg-white text-red-600' : 'bg-red-500'}`}>{l}</button>
-            ))}
+    <div className="app-container max-w-md mx-auto min-h-screen relative font-sans">
+      <header className="app-topbar">
+        <div className="flex items-center gap-3 w-full">
+          <div className="flex items-center gap-3">
+            <Truck size={22} />
+            <div className="app-title">MERKATO</div>
+          </div>
+
+          <div className="ml-4 flex items-center gap-2">
+            <button onClick={() => setPage('home')} className={`top-nav-btn ${page === 'home' ? 'active' : ''}`} aria-label="Home">
+              <Home size={18} />
+              <span className="text-[12px]">{t.home}</span>
+            </button>
+
+            <button onClick={() => setPage('cart')} className={`top-nav-btn relative ${page === 'cart' ? 'active' : ''}`} aria-label="Cart">
+              <ShoppingCart size={18} />
+              {cart.length > 0 && <span className="top-badge">{cart.length}</span>}
+              <span className="text-[12px]">{t.cart}</span>
+            </button>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <label htmlFor="lang" className="sr-only">Language</label>
+            <select id="lang" value={lang} onChange={e => setLang(e.target.value)} className="input text-sm">
+              <option value="en">EN</option>
+              <option value="am">AM</option>
+              <option value="om">OM</option>
+            </select>
           </div>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-          <input type="text" placeholder={t.search} className="w-full rounded-full py-2 pl-10 pr-4 text-black text-sm outline-none" />
+      </header>
+
+      <div className="app-content">
+        <div className="mb-4 card">
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="font-bold">{t.deals}</div>
+              <div className="text-sm text-muted text-[13px]">{t.freeDelivery}</div>
+            </div>
+            <div className="badge">Wholesale</div>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="search">
+            <Search size={18} className="text-muted" />
+            <input aria-label={t.search} placeholder={t.search} value={search} onChange={e => setSearch(e.target.value)} className="input flex-1" />
+            {search ? (
+              <button onClick={() => setSearch('')} className="btn btn-ghost" aria-label="clear search">✕</button>
+            ) : (
+              <button className="btn btn-ghost" aria-label="filters"><Star size={16} /></button>
+            )}
+          </div>
+
+            <div className="mt-3">
+              <div className="filter-scroll">
+                <button onClick={() => setCategory('all')} className={`filter-chip ${category === 'all' ? 'active' : ''}`} aria-pressed={category === 'all'}>
+                  <span className="emoji">🏷️</span>
+                  <span>All</span>
+                </button>
+                {categories.map(cat => {
+                  const emoji = cat.includes('sock') ? '🧦' : cat.includes('shirt') || cat.includes('tank') ? '👕' : cat.includes('belt') ? '🧵' : cat.includes('underwear') ? '🩲' : '📦';
+                  return (
+                    <button key={cat} onClick={() => setCategory(cat)} className={`filter-chip ${category === cat ? 'active' : ''}`} aria-pressed={category === cat}>
+                      <span className="emoji">{emoji}</span>
+                      <span>{cat}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-3">
+                <div className="filter-advanced card">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="text-sm font-bold">Price range</div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <input type="number" min="0" value={minPrice} onChange={e => setMinPrice(Number(e.target.value || 0))} className="input w-28" />
+                        <span className="text-muted">to</span>
+                        <input type="number" min="0" value={maxPrice} onChange={e => setMaxPrice(Number(e.target.value || 0))} className="input w-28" />
+                        <button onClick={() => { setMinPrice(0); setMaxPrice(100000); }} className="btn btn-ghost">Reset</button>
+                      </div>
+                    </div>
+
+                    <div className="w-40">
+                      <div className="text-sm font-bold">Min rating</div>
+                      <select value={minRating} onChange={e => setMinRating(Number(e.target.value))} className="input w-full mt-2">
+                        <option value={0}>Any</option>
+                        <option value={4}>4+</option>
+                        <option value={4.5}>4.5+</option>
+                        <option value={4.8}>4.8+</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="ml-auto flex items-center gap-2">
+                    <label className="text-sm text-muted">Sort</label>
+                    <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="input text-sm">
+                      <option value="featured">Featured</option>
+                      <option value="price-asc">Price ↑</option>
+                      <option value="price-desc">Price ↓</option>
+                      <option value="rating">Rating</option>
+                      <option value="sold">Popularity</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+        </div>
+
+        {loading ? (
+          <div className="product-grid">
+            {Array.from({length:6}).map((_,i) => (
+              <div key={i} className="card skeleton" style={{height: 220}} />
+            ))}
+          </div>
+        ) : (
+          <div className="product-grid">
+            {filteredItems.map(p => (
+              <ProductCard key={p.id} product={p} lang={lang} onAdd={addToCartWithQty} onQuickView={(prod) => setQuickProduct(prod)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="app-bottom fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-glass backdrop-blur-sm border-t py-3 px-4 flex justify-between items-center z-50">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setPage('home')} className={`flex flex-col items-center ${page === 'home' ? 'text-primary' : 'text-muted'}`} aria-label="Home">
+            <Home size={20} />
+            <span className="text-[10px] mt-1">{t.home}</span>
+          </button>
+          <button onClick={() => setPage('cart')} className={`flex flex-col items-center relative ${page === 'cart' ? 'text-primary' : 'text-muted'}`} aria-label="Cart">
+            <ShoppingCart size={20} />
+            {cart.length > 0 && <span className="absolute -top-1 -right-3 bg-accent text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold">{cart.length}</span>}
+            <span className="text-[10px] mt-1">{t.cart}</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <a href="tel:+251900000000" className="btn btn-ghost" aria-label="Call merchant"><Phone size={18} /></a>
+          <div className="text-right">
+            <div className="text-sm font-bold">{totalAmount} Br</div>
+            <div className="text-[11px] text-muted">{t.minOrder}</div>
+          </div>
+          <div className="sticky-cart-note ml-2 mr-2">
+            <span className="note-emoji">🧺</span>
+            <span>Minimum order: 1 dozen per item</span>
+          </div>
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">{t.checkout}</button>
         </div>
       </div>
 
-      {/* Main Content */}
-      {page === 'home' ? (
-        <div className="p-3">
-          <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-4 text-white mb-4 shadow-lg">
-            <h2 className="font-bold text-lg">{t.deals} 🔥</h2>
-            <p className="text-xs opacity-90">{t.freeDelivery}</p>
-          </div>
+      {page === 'cart' && (
+        <div className="app-content">
+          <h2 className="font-bold text-lg mb-3">{t.cart}</h2>
+          {cart.length === 0 ? (
+            <div className="empty-state">
+              <div className="text-lg font-bold">No items yet</div>
+              <div className="text-sm text-muted">Add a dozen to start your order</div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {cart.map(item => (
+                <CartItem key={item.id} item={item} onInc={(id)=>changeQty(id,1)} onDec={(id)=>changeQty(id,-1)} onRemove={removeFromCart} />
+              ))}
 
-          <div className="grid grid-cols-2 gap-3">
-            {PRODUCTS.map(p => (
-              <div key={p.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col">
-                <img src={p.image} className="h-32 w-full object-cover" alt="" />
-                <div className="p-2 flex-grow flex flex-col">
-                  <h3 className="text-xs font-bold line-clamp-2 h-8">
-                    {lang === 'en' ? p.name : lang === 'am' ? p.nameAm : p.nameOm}
-                  </h3>
-                  <div className="mt-2 text-red-600 font-bold">{p.price} Br</div>
-                  <div className="text-[10px] text-gray-400 line-through">{p.originalPrice} Br</div>
-                  <button onClick={() => addToCart(p)} className="mt-2 w-full bg-red-600 text-white text-[10px] font-bold py-2 rounded-lg active:scale-95 transition">
-                    + {t.addToCart}
-                  </button>
+              <div className="card">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-muted">{t.total}</div>
+                    <div className="font-bold text-lg">{totalAmount} Br</div>
+                  </div>
+                  <button onClick={() => setShowModal(true)} className="btn btn-primary">{t.checkout}</button>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="p-4">
-          <h2 className="text-xl font-bold mb-4">{t.cart}</h2>
-          {cart.map(item => (
-            <div key={item.id} className="flex gap-3 bg-gray-50 p-2 rounded-lg mb-2 items-center">
-              <img src={item.image} className="w-16 h-16 rounded object-cover" alt="" />
-              <div className="flex-grow">
-                <div className="text-xs font-bold">{item.name}</div>
-                <div className="text-red-600 font-bold text-sm">{item.price * item.qty} Br</div>
-                <div className="text-[10px] text-gray-500">{item.qty} Dozen</div>
-              </div>
-              <button onClick={() => setCart(cart.filter(c => c.id !== item.id))}><X size={18} /></button>
-            </div>
-          ))}
-
-          {cart.length > 0 && (
-            <div className="mt-6 border-t pt-4">
-              <div className="flex justify-between font-bold text-lg"><span>{t.total}</span><span>{totalAmount} Br</span></div>
-              <div className="bg-yellow-50 p-3 rounded-lg mt-4 border border-yellow-200">
-                <div className="flex justify-between text-yellow-800 font-bold"><span>{t.payNow}</span><span>{totalAmount * 0.1} Br</span></div>
-                <div className="flex justify-between text-gray-500 text-sm mt-1"><span>{t.payLater}</span><span>{totalAmount * 0.9} Br</span></div>
-              </div>
-              <button onClick={() => setShowModal(true)} className="w-full bg-green-600 text-white font-bold py-4 rounded-xl mt-6 shadow-lg">
-                {t.checkout}
-              </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Checkout Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-6">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm relative">
-            <button onClick={() => setShowModal(false)} className="absolute right-4 top-4"><X /></button>
-            <h3 className="font-bold text-lg mb-4">{t.confirm}</h3>
-            <input 
-              type="text" placeholder={t.name} 
-              className="w-full border p-3 rounded-lg mb-3" 
-              onChange={(e) => setUserInfo({...userInfo, name: e.target.value})} 
-            />
-            <input 
-              type="tel" placeholder={t.phone} 
-              className="w-full border p-3 rounded-lg mb-4" 
-              onChange={(e) => setUserInfo({...userInfo, phone: e.target.value})} 
-            />
-            <button 
-              onClick={() => {alert(t.orderSuccess); setShowModal(false); setCart([]); setPage('home');}}
-              className="w-full bg-red-600 text-white font-bold py-3 rounded-lg"
-            >
-              {t.confirm}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Nav */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t flex justify-around py-3 z-50">
-        <button onClick={() => setPage('home')} className={`flex flex-col items-center ${page === 'home' ? 'text-red-600' : 'text-gray-400'}`}>
-          <Home size={20} /><span className="text-[10px] mt-1">{t.home}</span>
-        </button>
-        <button onClick={() => setPage('cart')} className={`flex flex-col items-center relative ${page === 'cart' ? 'text-red-600' : 'text-gray-400'}`}>
-          <ShoppingCart size={20} />
-          {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{cart.length}</span>}
-          <span className="text-[10px] mt-1">{t.cart}</span>
-        </button>
-        <a href="tel:+251900000000" className="flex flex-col items-center text-gray-400">
-          <Phone size={20} /><span className="text-[10px] mt-1">{t.call}</span>
-        </a>
-      </div>
+      <ModalCheckout visible={showModal} onClose={() => setShowModal(false)} userInfo={userInfo} setUserInfo={setUserInfo} onConfirm={confirmOrder} labels={t} />
+      <QuickView product={quickProduct} visible={!!quickProduct} onClose={() => setQuickProduct(null)} onAdd={(p, qty) => addToCartWithQty(p, qty)} lang={lang} />
+      <Toast message={toast} />
     </div>
   );
 }
